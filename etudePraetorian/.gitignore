@@ -1,0 +1,10 @@
+Backups
+Media
+newSeq/
+Data_Visualization/Results
+Data_Training/resampled_results/
+Data_Training/Results/
+Audio/
+__pycache__/
+Data_Visualization/newSeq/
+*.swp
