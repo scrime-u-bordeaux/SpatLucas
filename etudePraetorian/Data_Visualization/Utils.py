@@ -31,10 +31,8 @@ def timecode_to_seconds(tc):
     # Pattern timecode classique
     match = re.match(r"(\d+):(\d+):(\d+):(\d+)", tc_str)
     if match:
-        print("MATCH")
-        print(match.groups())
         h, m, s, f = map(int, match.groups())
-        fps = 100
+        fps = 25
         return h * 3600 + m * 60 + s + f / fps
     # Pattern nombre à 3 décimales (ex: 12.345)
     match_decimal = re.match(r"(\d+)\.(\d{3})", tc_str)
@@ -51,7 +49,6 @@ def get_regions_from_name(track_name_file):
     if os.path.exists(csv_audio_path):
         df_audio_csv = pd.read_csv(csv_audio_path)
         if not df_audio_csv.empty:
-            print(f"Lecture des régions depuis : {csv_audio_path}")
             # Ajout d'une première région fictive "Silence" avant le début de la musique
             first_start = timecode_to_seconds(df_audio_csv.iloc[0]["Start"])
             regions.append({"name": "Silence", "start": 0.0})
@@ -97,7 +94,5 @@ def evaluate_range_dataset(csv):
         except Exception as e:
             print(f"{column}: erreur lors de l’analyse ({e})")
     return df
-
-    
 
 

@@ -3,9 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import sys
-from getData import process_track
 from scipy.io import wavfile
 import warnings
+
+from .getData import process_track
+
 
 """
 Compute the RMS values for the audio data.

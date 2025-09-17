@@ -9,11 +9,10 @@ import re
 import warnings
 import sys
 
-
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from Utils import get_track_name
 from Utils import get_regions_from_name, indexInstrument
 from Data_Visualization.audioRMS import detect_periods
-import sys
 
 """
     Create Dataset from parsed data in order to train a model.
@@ -47,7 +46,7 @@ INSTRUMENT_IDX = 2
 # 8: "BALLADE ENTRE LES MINES"
 # 9: "TEMPS MORT"
 
-TRACK_IDX = 9
+TRACK_IDX = 7
 
 class Coord:
     def __init__(self, x: float, y: float):
@@ -159,26 +158,26 @@ def parse_spat_data(print_times=False):
 
     print(f"Nombre de points spatiaux : {len(real_times)}")
 
-
+    print(len(real_times), len(x_coords), len(y_coords))
     resampled_times, resampled_coord = resample(real_times, total_duration, x_coords, y_coords)
 
     x_coords_np = np.array([pt[0] for pt in resampled_coord])
     y_coords_np = np.array([pt[1] for pt in resampled_coord])
     real_times_np = np.array(real_times)
 
-    dx = np.diff(x_coords_np, prepend=x_coords_np[0])
-    dy = np.diff(y_coords_np, prepend=y_coords_np[0])
+    x_coords_np = np.round(x_coords_np, 3)
+    y_coords_np = np.round(y_coords_np, 3)
 
-    # dx = np.diff(x_coords_np)
-    # dx = np.insert(dx, 0, 0.0)
-    # dy = np.diff(y_coords_np)
-    # dy = np.insert(dy, 0, 0.0)                                                      
+    resampled_coord = list(zip(x_coords_np, y_coords_np))
+
+    dx = np.round(np.insert(np.diff(x_coords_np), 0, 0.0), 6)
+    dy = np.round(np.insert(np.diff(y_coords_np), 0, 0.0), 6)                                            
 
     resampled_speed = list(zip(dx, dy))
 
     if not print_times:
         resampled_times = None
-
+  
     return resampled_times, resampled_coord, resampled_speed
 
 # AUDIO DATA PARSING
@@ -301,7 +300,9 @@ def parse_regions():
     ]
     
     region_starts = [region["start"] for region in regions]
-    
+
+    print("regions=:", regions)
+
     audio_path = os.path.join(AUDIO_DIR, f"{track_name}.wav")
     if not os.path.exists(audio_path):
         raise FileNotFoundError(f"Fichier audio {track_name}.wav introuvable")
@@ -404,7 +405,7 @@ def create_csv_all_values(all_tracks=True):
         with open(output_path, "w") as out_file:
             # Header
             out_file.write("time,rms,region,temps,mesures,x,y\n")
-            for (time, rms, (x, y), region, beat, measure) in zip(times, audio_data, spat_coord, regions_data, beats, measures):
+            for (time, rms, (x, y), (dx, dy), region, beat, measure) in zip(times, audio_data, spat_coord, spat_speed, regions_data, beats, measures):
                 out_file.write(f"{time:.2f},{rms},{region},{beat},{measure},{x},{y}\n")
 
         print(f"Fichier CSV unifié créé dans : {output_path}")

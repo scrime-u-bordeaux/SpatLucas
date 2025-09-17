@@ -1,6 +1,5 @@
 # main.py
 
-
 import audioRMS
 import spat
 import sys

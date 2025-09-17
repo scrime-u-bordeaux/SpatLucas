@@ -3,6 +3,7 @@ RESULT_FOLDER = "Results/"
 RESULT_FOLDER_PREDICT = "Results/Predict_coords/"
 RESULT_FOLDER_MAX = "Results/MaxData/"
 
+from time import time
 import pandas as pd
 import os 
 from sklearn.neural_network import MLPRegressor
@@ -13,6 +14,10 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn import svm
 from sklearn.naive_bayes import GaussianNB
 import inspect
+import time
+import sys
+import np
+from hmmlearn.hmm import GaussianHMM, GMMHMM
 
 
 """
@@ -49,46 +54,39 @@ def main():
     df_test['region_encoded'] = label_encoder.transform(df_test['region'])
 
     features = ['rms', 'region_encoded', 'temps', 'mesures']
-    X_train = df_train[features]
-    y_train = df_train[['x', 'y']]
-    X_test = df_test[features]
-    y_test = df_test[['x', 'y']]
+    X_train = df_train[features].values
+    y_train = df_train[['x', 'y']].values
+    X_test = df_test[features].values
+    y_test = df_test[['x', 'y']].values
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
 
-    # Choose a model
-    model = MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=500, random_state=42)
-    
-    print(model.__class__)
-    model.fit(X_train_scaled, y_train)
+    # Concatène features + coordonnées pour entraîner le HMM
+    observations_train = np.hstack([X_train, y_train])
 
-    y_pred = model.predict(X_test_scaled)
+    model = GaussianHMM(n_components=10, covariance_type="diag", n_iter=400, random_state=42)
 
-    # Evaluation
+    print("Début de l'entraînement du HMM...")
+    start_time = time.time()
+    model.fit(observations_train)
+    end_time = time.time()
+    print(f"Entraînement terminé en {end_time - start_time:.2f} secondes.")
+
+    # Générer une séquence de même longueur que X_test
+    samples, states = model.sample(len(X_test))
+    y_pred = samples[:, -2:]  # extraire les coordonnées x,y générées
+
+    # Évaluation
     mse = mean_squared_error(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
     mape = mean_absolute_percentage_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
-    
-
-    print("=== Évaluation modèle simple ===")
+    print("=== Évaluation modèle HMM ===")
     print(f"MSE : {mse:.4f}")
     print(f"R2  : {r2:.4f}")
     print(f"MAE : {mae:.4f}")
     print(f"MAPE : {mape:.4f}")
 
-    from sklearn.dummy import DummyRegressor
-    
-
-    dummy = DummyRegressor(strategy="mean")
-    dummy.fit(X_train_scaled, y_train)
-    y_dummy = dummy.predict(X_test_scaled)
-
-    mse_dummy = mean_squared_error(y_test, y_dummy)
-    print("MSE Dummy (baseline) :", mse_dummy)
-    write_coord_in_file(y_pred)
+    write_coord_in_file(y_pred, variation_name="1")
 
 
 """
@@ -97,14 +95,14 @@ Parameters:
   y_pred: The predicted coordinates as a DataFrame or 2D array.
   filename: The name of the output CSV file (default is "predicted_coordinates.csv").
 """
-def write_coord_in_file(y_pred, filename="predicted_coordinates.csv"):
+def write_coord_in_file(y_pred, filename="predicted_coordinates.csv", variation_name=""):
     """
     Écrit uniquement les coordonnées prédites x et y dans un fichier CSV.
     """
 
     os.makedirs(RESULT_FOLDER, exist_ok=True)
 
-    df_coords = pd.DataFrame(y_pred, columns=["x_pred", "y_pred"])
+    df_coords = pd.DataFrame(y_pred, columns=["x", "y"])
 
     frame = inspect.currentframe()
     while frame:
@@ -115,7 +113,7 @@ def write_coord_in_file(y_pred, filename="predicted_coordinates.csv"):
     else:
         model_class_name = "UnknownModel"
 
-    filename_with_model = os.path.join("Predict_coords/", f"{model_class_name}_{filename}")
+    filename_with_model = os.path.join("Predict_coords/", f"{model_class_name}{variation_name}_{filename}")
     output_path = os.path.join(RESULT_FOLDER, filename_with_model)
     df_coords.to_csv(output_path, index=False)
 
@@ -135,13 +133,13 @@ def convert_to_max_data(csv_file):
 
     output_lines.append("0, id 09-Temps-Mort;")
 
-    last_x, last_y = df.iloc[0]['x_pred'], df.iloc[0]['y_pred']
+    last_x, last_y = df.iloc[0]['x'], df.iloc[0]['y']
     norm_time = 0.0
     output_lines.append(f"{index}, {norm_time:.6f} {last_x:.6f} {last_y:.6f};")
     index += 1
 
     for i in range(1, n_frames):
-        x, y = df.iloc[i]['x_pred'], df.iloc[i]['y_pred']
+        x, y = df.iloc[i]['x'], df.iloc[i]['y']
         norm_time = i / (n_frames - 1) if n_frames > 1 else 0.0  # Normalisé entre 0 et 1
         if x != last_x or y != last_y:
             output_lines.append(f"{index}, {norm_time:.6f} {x:.6f} {y:.6f};")
@@ -159,5 +157,5 @@ if __name__ == "__main__":
 
     # Convert the predicted coordinates to Max/MSP format
 
-    # csv_file = os.path.join(RESULT_FOLDER_PREDICT, "LinearRegression_predicted_coordinates.csv")
-    # convert_to_max_data(csv_file)
+    csv_file = os.path.join(RESULT_FOLDER_PREDICT, "GaussianHMM_predicted_coordinates.csv")
+    convert_to_max_data(csv_file)
