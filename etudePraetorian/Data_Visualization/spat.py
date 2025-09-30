@@ -82,7 +82,7 @@ def generate_positions_figures(output_dir, instrument_name, track_name, x_coords
             
         plt.close()
         positions_paths.append(output_path)
-    print(f"Saving regions spatial plot to : {output_path}")
+        print(f"Saving regions spatial plot to : {output_path}")
     return positions_paths
 
 """

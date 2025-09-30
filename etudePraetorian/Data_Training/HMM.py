@@ -13,6 +13,8 @@ def train_hmm(data_paths, numeric_columns, n_components=12, n_iter=300, random_s
     for path in data_paths:
         df = pd.read_csv(path)
         X = df[numeric_columns].values
+        print("Données lues :", X.shape, "extraits de", path)
+        print(X)
         all_sequences.append(X)
         lengths.append(len(X))
         print("Utilisé pour l'entrainement : ", path)
@@ -81,6 +83,7 @@ def predict_spatialisation(model, scaler, df):
 
     # Associer chaque état à ses coordonnées moyennes apprises
     means = scaler.inverse_transform(model.means_)
+    print("Moyennes des états (dénormalisées) :\n", means)
     coords_means = means[:, -2:]  # les 2 dernières colonnes sont x/y
 
     coords_pred = np.array([coords_means[state] for state in hidden_states])
@@ -125,9 +128,9 @@ if __name__ == "__main__":
         "y_Voc 1"
         ]
 
-    n_components = 50 # nombre d'états cachés
-    n_iter = 100       # itérations max d’entrainement
-    n_samples = 40     # nombre de points générés pour trajectoire
+    n_components = 200 # nombre d'états cachés
+    n_iter = 1000       # itérations max d’entrainement
+    n_samples = 80     # nombre de points générés pour trajectoire
 
     # ---- Entraînement ----
     model, scaler = train_hmm(DATA_TRAIN_PATHS, numeric_columns,

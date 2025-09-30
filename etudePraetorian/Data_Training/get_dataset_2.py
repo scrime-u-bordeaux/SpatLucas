@@ -53,12 +53,8 @@ def resample(times, total_duration, *datas, step=0.02):
         prev_time_window += step
     return np.array(resampled_times), np.array(resampled_data)
 
-# -----------------------------
-# Dataset Builder
-# -----------------------------
 def build_dataset(track_id, rms_indices, target_idx,
                   start_time=1, end_time=None, fs=10,
-                  add_without_coord=False,
                   seq_dir="seq", audio_dir="Audio", bpm_file="BPM_tracks.csv",
                   out_dir="Data_Training/resampled_results2",
                   include_time=True, include_beats=True, include_measures=True, 
@@ -163,13 +159,10 @@ def build_dataset(track_id, rms_indices, target_idx,
         ])
         df_out["region"] = regions_resampled[:len(grid)]
 
-    # --- Ajouter coords (vides ou réels) ---
+    # --- Ajouter coords réelles ---
     target_name = get_instrument_name(target_idx)
-    # J'aimerais pour créer aussi une version sans coord (les deux) et pas faire un else
-    
     df_out[f"x_{target_name}"] = x_interp
     df_out[f"y_{target_name}"] = y_interp
-
 
     # --- Réordonner les colonnes ---
     ordered_cols = []
@@ -188,33 +181,38 @@ def build_dataset(track_id, rms_indices, target_idx,
     
     out_path = os.path.join(out_dir, f"dataset_track{track_id}_seq{num_dataset}.csv")
     df_out.round(3).to_csv(out_path, index=False)
-    print(f"Dataset créé (avec coord) : {out_path}")
-
-    # --- Sauvegarde ---
-    if add_without_coord:
-        df_out[f"x_{target_name}"] = np.nan
-        df_out[f"y_{target_name}"] = np.nan
-        out_path_no = os.path.join(out_dir, f"dataset_track{track_id}_seq{num_dataset}_no_coord.csv")
-        df_out.round(3).to_csv(out_path_no, index=False)
-        print(f"Dataset créé (sans coord) : {out_path_no}")
+    print(f"Dataset créé : {out_path}")
 
     num_dataset += 1
     return df_out
 
+import glob 
+def clear_datasets(out_dir="Data_Training/resampled_results2"):
+    """Supprime tous les fichiers datasets générés dans le dossier spécifié."""
+    files = glob.glob(os.path.join(out_dir, "dataset_track*_seq*.csv"))
+    for f in files:
+        os.remove(f)
+    print(f"{len(files)} fichiers supprimés de {out_dir}")
+
 
 
 if __name__ == "__main__":
+    # Supprime les anciens datasets
+    out_dir = "Data_Training/resampled_results2"
+    clear_datasets(out_dir=out_dir)
     # Ne pas préciser start_time et end_time = toute la durée
 
     ## Nouveau diable
-    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=230, end_time=245, fs=10, add_without_coord=True, include_measures=True)
-    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=109, end_time=119, fs=10, add_without_coord=True, include_measures=True)
-    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=77, end_time=88, fs=10, include_measures=True)
-    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=129, end_time=141, fs=10, include_measures=True)
-    # build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, fs=10, include_measures=True)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=230, end_time=245, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=109, end_time=119, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=77, end_time=88, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=129, end_time=141, fs=10)
     ## Hypnose
     # build_dataset(track_id=4, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=193, end_time=205, fs=10, add_without_coord=True)
-    
+    # for i in range(1, 9):
+    #     # build_dataset(track_id=i, rms_indices=[0,1,2,3,4,5,6], target_idx=1, fs=10, add_without_coord=True, include_measures=True)
+    #     build_dataset(track_id=i, rms_indices=[0,1,2,3,4,5,6], target_idx=1, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, fs=10)
     
 
 

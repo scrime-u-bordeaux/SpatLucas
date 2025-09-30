@@ -117,13 +117,9 @@ Not functional currently
 """
 def process_mixing_results(result_audio, result_spat, track_idx, instrument_idx, line_height=0.8, line_width=0.9):
     """
-    Displays a grid where each row corresponds to an instrument.
-    Colored bands indicate the periods when the instrument is playing.
-    In each cell, the spatialization speed curve is shown.
-    Above all instruments, the audio region segments (regions_csv) are displayed.
-    The x-axis represents time (in seconds).
-    line_height: height of each row (y-axis)
-    line_width: relative width of the bands (x-axis, 1.0 = full width)
+    Affiche les périodes de jeu et les vitesses de spatialisation par instrument,
+    avec les frontières de régions affichées comme de grandes lignes verticales
+    traversant toutes les pistes (pas de zones colorées).
     """
     import matplotlib.pyplot as plt
 
@@ -136,43 +132,33 @@ def process_mixing_results(result_audio, result_spat, track_idx, instrument_idx,
     if result_audio and isinstance(result_audio[0], dict):
         regions = result_audio[0].get("regions", [])
 
-    num_rows = num_instruments + 1
-    fig, ax = plt.subplots(num_rows, 1, figsize=(12, line_height * num_rows), sharex=True)
+    num_rows = num_instruments
+    fig, ax = plt.subplots(
+        num_rows, 1,
+        figsize=(12, line_height * num_rows),
+        sharex=True,
+        gridspec_kw={"hspace": 0}  # pas d'espace vertical
+    )
     if num_rows == 1:
         ax = [ax]
 
-    region_ax = ax[-1]
-    region_ax.set_ylabel("Région")
-    region_ax.set_yticks([])
+    # --- Récupération des frontières de régions ---
+    boundaries = []
+    if regions:
+        for i, region in enumerate(regions):
+            t_start = region.get("start", None)
+            if t_start is not None:
+                boundaries.append((t_start, region.get("label", "")))
 
-    num_regions = len(regions)
-    region_colors = plt.get_cmap('tab20', num_regions)
-    for i, region in enumerate(regions):
-        t_start = region.get("start", None)
-        if i < num_regions - 1:
-            t_end = regions[i + 1].get("start", None)
-        else:
-            max_time = 0
-            for audio, spat in zip(result_audio, result_spat):
-                if audio and "joue_periods_filtrees" in audio and audio["joue_periods_filtrees"]:
-                    max_time = max(max_time, max(period[1] for period in audio["joue_periods_filtrees"]))
-                if spat and "real_times" in spat and spat["real_times"]:
-                    max_time = max(max_time, max(spat["real_times"]))
-            t_end = max_time if max_time > t_start else t_start + 1 
-        label = region.get("label", "")
-        color = region_colors(i)
-        if t_start is not None and t_end is not None:
-            region_ax.axvspan(
-                t_start, t_end,
-                color=color, alpha=0.25, ymin=0, ymax=1
-            )
-            if label:
-                region_ax.text(
-                    (t_start + t_end) / 2, 0.5,
-                    label[:3], ha='center', va='center', fontsize=9, color='black', alpha=0.85,
-                    transform=region_ax.get_xaxis_transform()
-                )
+    # --- Déterminer fin de la timeline (pour la dernière région) ---
+    max_time = 0
+    for audio, spat in zip(result_audio, result_spat):
+        if audio and "joue_periods_filtrees" in audio and audio["joue_periods_filtrees"]:
+            max_time = max(max_time, max(period[1] for period in audio["joue_periods_filtrees"]))
+        if spat and "real_times" in spat and spat["real_times"]:
+            max_time = max(max_time, max(spat["real_times"]))
 
+    # --- Tracer les courbes par instrument ---
     for idx, (audio, spat) in enumerate(zip(result_audio, result_spat)):
         joue_periods = audio.get('joue_periods_filtrees', [])
         real_times = np.array(spat.get('real_times', []))
@@ -183,31 +169,26 @@ def process_mixing_results(result_audio, result_spat, track_idx, instrument_idx,
             t_start, t_end = period
             ax[idx].axvspan(t_start, t_end, color='tab:green', alpha=0.1, ymin=0.1, ymax=0.9)
 
-        # Display of the speed curve (a single curve, without distinction)
-        # Correction: adjust the length of 'vitesse' to match 'real_times'
         if len(vitesse) == len(real_times) - 1:
             vitesse = np.insert(vitesse, 0, 0)
         if len(real_times) > 1 and len(vitesse) == len(real_times):
-            ax[idx].plot(
-                real_times,
-                vitesse,
-                color='tab:blue',
-                linewidth=1.0,
-            )
+            ax[idx].plot(real_times, vitesse, color='tab:blue', linewidth=1.0)
 
-        ax[idx].set_ylabel(instrument_label)
+        ax[idx].set_ylabel(instrument_label, rotation=0, ha="right", va="center", fontsize=8)
         ax[idx].set_yticks([])
 
-    region_ax.set_xlabel("Temps (s)")
-    plt.suptitle("Périodes de jeu, vitesse de spatialisation et régions audio")
+        # --- Ajouter les traits verticaux des régions ---
+        for t, label in boundaries:
+            ax[idx].axvline(t, color="red", linestyle="--", linewidth=1, alpha=0.7)
+            # Option : ajouter le label une seule fois en haut
+            if idx == 0 and label:
+                ax[idx].text(t, 1.02, label, transform=ax[idx].get_xaxis_transform(),
+                             ha="center", va="bottom", rotation=90, fontsize=8, color="red")
+
+    ax[-1].set_xlabel("Temps (s)")
+    plt.suptitle("Périodes de jeu, vitesse de spatialisation et frontières de régions")
     plt.tight_layout(rect=[0, 0, 1, 0.96])
     plt.show()
-
-    # track_name = Utils.get_track_name(track_idx)
-    # instruments_str = Utils.get_instrument_name(instrument_idx + 1)
-    # output_path = f"mixing_results_{track_name}_{instruments_str}.png"
-    # plt.savefig(output_path)
-    # print(f"Figure sauvegardée dans {output_path}")
     plt.close(fig)
 
 if __name__ == "__main__":

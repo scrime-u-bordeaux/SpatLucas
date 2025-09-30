@@ -45,23 +45,22 @@ def timecode_to_seconds(tc):
     return None
 
 def get_regions_from_name(track_name_file):
-    base_dir = os.path.dirname(__file__)  # le dossier contenant ce fichier
+    # On part du dossier parent de Data_Visualization (donc etudePraetorian/)
+    base_dir = os.path.dirname(os.path.dirname(__file__))
     csv_audio_path = os.path.join(base_dir, "Audio", f"{track_name_file}.csv")
     regions = []
     if os.path.exists(csv_audio_path):
         df_audio_csv = pd.read_csv(csv_audio_path)
         if not df_audio_csv.empty:
             print(f"Lecture des régions depuis : {csv_audio_path}")
-            # Ajout d'une première région fictive "Silence" avant le début de la musique
+            # Ajout d'une première région fictive "Silence"
             first_start = timecode_to_seconds(df_audio_csv.iloc[0]["Start"])
             regions.append({"name": "Silence", "start": 0.0})
-
             for _, row in df_audio_csv.iterrows():
                 start_sec = timecode_to_seconds(row["Start"])
-                region = {"name": row["Name"], "start": start_sec}
                 if start_sec is None or start_sec <= 0.0:
                     continue
-                regions.append(region)
+                regions.append({"name": row["Name"], "start": start_sec})
     else:
         print(f"Fichier CSV non trouvé : {csv_audio_path}")
     return sorted(regions, key=lambda x: x["start"])

@@ -6,7 +6,7 @@ import sys
 from scipy.io import wavfile
 import warnings
 
-from .getData import process_track
+from getData import process_track
 
 
 """
