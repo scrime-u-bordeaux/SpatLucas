@@ -14,19 +14,18 @@ NUM_INSTRUMENTS = 6
 def get_num_instruments():
     return NUM_INSTRUMENTS
 
-
 """
-Usage function to parse command line arguments
-Parameters:
-    argc: The number of command line arguments.
-    argv: The list of command line arguments.
-Returns:
-    A tuple containing:
-    - ok: A boolean indicating if the usage is correct.
-    - mode: The mode of operation (audio, spat, mixing).
-    - track_idx: The index of the track to analyze.
-    - instrument_idx: The index of the instrument to analyze (or None if all instruments).
-    - all_instruments: A boolean indicating if all instruments should be analyzed.
+Fonction d'utilisation pour analyser les arguments de la ligne de commande.
+Paramètres :
+    argc : Le nombre d'arguments de la ligne de commande.
+    argv : La liste des arguments de la ligne de commande.
+Retourne :
+    Un tuple contenant :
+    - ok : Un booléen indiquant si l'utilisation est correcte.
+    - mode : Le mode d'opération (audio, spat, mixing).
+    - track_idx : L'indice du morceau à analyser.
+    - instrument_idx : L'indice de l'instrument à analyser (ou None si tous les instruments).
+    - all_instruments : Un booléen indiquant si tous les instruments doivent être analysés.
 """
 def usage(argc, argv):
     if argc < 3 or argv[1] not in ("audio", "spat", "mixing"):
@@ -110,10 +109,9 @@ def main():
 
 import matplotlib.pyplot as plt
 
-
 """
-Generates a plot showing the speed of movement over time for a specific track and instrument.
-Not functional currently
+Génère un graphique montrant la vitesse de déplacement au cours du temps pour un morceau et un instrument spécifiques.
+Actuellement non fonctionnel.
 """
 def process_mixing_results(result_audio, result_spat, track_idx, instrument_idx, line_height=0.8, line_width=0.9):
     """

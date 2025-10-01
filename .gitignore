@@ -4,3 +4,5 @@ etudePraetorian/Media
 etudePraetorian/Results
 etudePraetorian/*.rpp
 etudePraetorian/Tests/
+*.ods
+*.xlsx

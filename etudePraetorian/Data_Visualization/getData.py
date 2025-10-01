@@ -11,6 +11,13 @@ SEQ_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'seq')
 AUDIO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Audio')
 RESAMPLE_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'newSeq')
 
+"""
+Rééchantillone les données à intervalles réguliers.
+Paramètres:
+------------
+    figures: Liste des chaînes de caractères représentant les figures.
+    total_duration: La durée totale de l'audio.
+"""
 def resample_figures(figures, total_duration):
     result = [
         [float(parts[-3]), float(parts[-2]), float(parts[-1])]
@@ -32,6 +39,16 @@ def resample_figures(figures, total_duration):
         resampled.append([x, y])
     return result, resampled
 
+"""Traite les données d'une ou plusieurs pistes.
+Paramètres:
+------------
+    instrument_idx: L'index de l'instrument à traiter (None si all_instruments=True).
+    selected_num_track: Le numéro de la piste à traiter.
+    seq_dir: Le répertoire contenant les fichiers de séquences (par défaut "Data_Training/seq").
+    audio_dir: Le répertoire contenant les fichiers audio (par défaut "Audio").
+    resample_output_dir: Le répertoire où enregistrer les fichiers rééchantillonnés.
+    all_instruments: Booléen indiquant si toutes les pistes doivent être traitées simultanément (pour la génération de heatmap).
+"""
 def process_track(
     instrument_idx=None,
     selected_num_track=None,
@@ -176,7 +193,7 @@ def process_track(
         os.makedirs(resample_output_dir, exist_ok=True)
         lines = [f"{x} {y}\n" for x, y in resampled]
 
-        write_file = True
+        write_file = False
         if os.path.exists(resample_output_path):
             with open(resample_output_path, 'r', encoding='utf-8') as f:
                 if f.readlines() == lines:

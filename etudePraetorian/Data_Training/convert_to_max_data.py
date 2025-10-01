@@ -22,7 +22,7 @@ def convert_to_max_data(csv_files, track_id, instr_coord_id):
     L'index à gauche continue de s'incrémenter (pas de reset).
     """
 
-    RESULT_FOLDER_MAX = "resampled_result_2_max_data/"
+    RESULT_FOLDER_MAX = "max_data_predicted"
     os.makedirs(RESULT_FOLDER_MAX, exist_ok=True)
 
     # Fichier de sortie (un seul par instrument)

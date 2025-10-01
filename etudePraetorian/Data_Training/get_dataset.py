@@ -1,204 +1,41 @@
-import pandas as pd
-import itertools
-import contextlib
-import wave
-from scipy.io import wavfile
+import os
 import numpy as np
-import os   
-import re
+import pandas as pd
 import warnings
+import re
+import contextlib, wave
 import sys
+from scipy.io import wavfile
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+num_dataset = 0
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
+os.chdir(parent_dir)
+sys.path.insert(0, parent_dir)
+from Utils import get_regions_from_name
 from Utils import get_track_name
-from Utils import get_regions_from_name, indexInstrument
-from Data_Visualization.audioRMS import detect_periods
+from Utils import get_instrument_name
 
 """
-    Create Dataset from parsed data in order to train a model.
-    We can specify the parameters to parse the data.
-    For now we put only one instrument in the dataset (mostly the guitar).
+Fournit la durée audio du fichier "path"
 """
-
-SEQ_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'seq')
-AUDIO_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Audio')
-RESAMPLE_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), 'TestFolder')
-RESAMPLE_DIR = os.path.join(os.path.dirname(__file__), "resampled_results")
-
-TIME_SAMPLE = 0.02
-
-# 0: "Voc 1"
-# 1: "Voc 2"
-# 2: "Guitare"
-# 3: "Basse"
-# 4: "BatterieG"
-# 5: "BatterieD"
-
-INSTRUMENT_IDX = 2
-
-# 1: "APOSTAT"
-# 2: "ECRAN DE FUMEE"
-# 3: "L'ENNEMI"
-# 4: "HYPNOSE"
-# 5: "COMMUNION"
-# 6: "FACE AUX GEANTS"
-# 7: "NOUVEAU DIABLE"
-# 8: "BALLADE ENTRE LES MINES"
-# 9: "TEMPS MORT"
-
-TRACK_IDX = 7
-
-class Coord:
-    def __init__(self, x: float, y: float):
-        self.x = x
-        self.y = y
-
-    def __repr__(self):
-        return f"{self.x, self.y}\n"
-
 def get_audio_duration(path):
     with contextlib.closing(wave.open(path, 'r')) as f:
         return f.getnframes() / f.getframerate()
 
-
 """
-    Resample input arrays (datas) according to the given times array,
-    using a fixed time step (TIME_SAMPLE). All arrays must be of the same length.
-    Parameters:
-        times (list or array): Time points corresponding to the data.
-        total_duration (float): Total duration to resample over.
-        *datas (list or array): One or more arrays of data to resample, all of the same length as times.
-    Returns: 
-        tuple: (resampled_times, resampled_data)
-            resampled_times: list of time points used for resampling
-            resampled_data: list of values (or tuples if multiple datas) at each time step
-    """
-def resample(times, total_duration, *datas):
-    if not datas:
-        print("No data provided for resampling.")
-        return [], []
-    n = len(times)
-    if any(len(d) != n for d in datas):
-        raise ValueError("All input arrays must have the same length as times.")
-
-    resampled_data = []
-    resampled_times = []
-
-    prev_time_window = TIME_SAMPLE
-    idx = 0
-
-    while prev_time_window <= total_duration:
-        if idx < n and times[idx] <= prev_time_window:
-            values = tuple(d[idx] for d in datas)
-            idx += 1
-        else:
-            values = tuple(d[idx - 1] if idx > 0 else d[0] for d in datas)
-
-        resampled_data.append(values[0] if len(values) == 1 else values)
-        resampled_times.append(prev_time_window)
-        prev_time_window += TIME_SAMPLE
-
-    while prev_time_window <= total_duration:
-        resampled_data.append(resampled_data[-1]) 
-        resampled_times.append(prev_time_window)
-        prev_time_window += TIME_SAMPLE
-
-    return resampled_times, resampled_data
-
-
-# SPAT DATA PARSING
+Calcule les valeurs RMS pour les données audio.
+Paramètres:
+------------
+    data_instr: Les données audio pour l'instrument.
+    rate: La fréquence d'échantillonnage des données audio.
+    window_sec: La durée de la fenêtre en secondes pour le calcul du RMS.
+    alpha: Le facteur de lissage pour le calcul du RMS (par défaut 0.2).
 """
-   Parse spatial data from a file and return the coordinates and speed.
-   Parameters:
-         print_times (bool): If True, print the times of the parsed data.
-    Returns:
-        tuple: (resampled_times, resampled_coord, resampled_speed)
-            resampled_times: list of time points used for resampling
-            resampled_coord: list of coordinates (x, y) at each time step
-            resampled_speed: list of speed vectors (dx, dy) at each time step
-   """
-def parse_spat_data(print_times=False):
-    filename = f"{indexInstrument[INSTRUMENT_IDX + 1]}.txt"
-    df = pd.read_csv(os.path.join(SEQ_DIR, filename), header=None)
-
-    track_indices, track_names, figures_groups = [], [], []
-    current_figures = []
-
-    for value in df.iloc[:, 1].values:
-        value_str = str(value)
-        if value_str.strip().startswith("id"):
-            if current_figures:
-                figures_groups.append(current_figures)
-                current_figures = []
-            track_part = value_str.split('-', 1)[0].replace('id', '').strip()
-            track_index = int(track_part) if track_part.isdigit() else None
-            track_indices.append(track_index)
-            track_name = value_str.split('-', 1)[-1].strip().rstrip(';')
-            track_names.append(track_name)
-        else:
-            current_figures.append(' '.join(value_str.rstrip(';').strip().split()))
-    if current_figures:
-        figures_groups.append(current_figures)
-
-    combined = sorted(
-        itertools.zip_longest(track_indices, track_names, figures_groups),
-        key=lambda x: (x[0] if x[0] is not None else float('inf'))
-    )
-
-    track_index, track_name, figures = combined[TRACK_IDX - 1]
-    audio_path = os.path.join(AUDIO_DIR, f"{track_name}.wav")
-    if not os.path.exists(audio_path):
-        raise FileNotFoundError(f"Fichier audio {track_name}.wav introuvable")
-    total_duration = get_audio_duration(audio_path)
-
-    real_times, x_coords, y_coords = zip(*[
-        (float(parts[-3]) * total_duration, float(parts[-2]), float(parts[-1]))
-        for value in figures if len(parts := value.split()) >= 3
-    ])
-
-    print(f"Nombre de points spatiaux : {len(real_times)}")
-
-    print(len(real_times), len(x_coords), len(y_coords))
-    resampled_times, resampled_coord = resample(real_times, total_duration, x_coords, y_coords)
-
-    x_coords_np = np.array([pt[0] for pt in resampled_coord])
-    y_coords_np = np.array([pt[1] for pt in resampled_coord])
-    real_times_np = np.array(real_times)
-
-    x_coords_np = np.round(x_coords_np, 3)
-    y_coords_np = np.round(y_coords_np, 3)
-
-    resampled_coord = list(zip(x_coords_np, y_coords_np))
-
-    dx = np.round(np.insert(np.diff(x_coords_np), 0, 0.0), 6)
-    dy = np.round(np.insert(np.diff(y_coords_np), 0, 0.0), 6)                                            
-
-    resampled_speed = list(zip(dx, dy))
-
-    if not print_times:
-        resampled_times = None
-  
-    return resampled_times, resampled_coord, resampled_speed
-
-# AUDIO DATA PARSING
-
-"""
-    Compute the RMS values of the audio data.
-    Parameters:
-        data_instr (numpy array): The audio data for the instrument.
-        rate (int): The sample rate of the audio data.
-        window_sec (float): The size of the window in seconds for RMS calculation.
-        alpha (float): The smoothing factor for the RMS calculation.
-    Returns:
-        tuple: (rms_values, window_sec)
-            rms_values: numpy array of RMS values calculated over the windows
-            window_sec: the size of the window in seconds used for RMS calculation
-   """
-def compute_rms(data_instr, rate, window_sec=TIME_SAMPLE, alpha=0.2):
+def compute_rms(data_instr, rate, window_sec, alpha=0.2):
     window_size = int(rate * window_sec)
     num_windows = int(len(data_instr) / window_size)
     rms_values = []
-    times = []
     for i in range(num_windows):
         start = i * window_size
         end = start + window_size
@@ -209,207 +46,212 @@ def compute_rms(data_instr, rate, window_sec=TIME_SAMPLE, alpha=0.2):
         if rms_values:
             rms = alpha * rms + (1 - alpha) * rms_values[-1]
         rms_values.append(rms)
-        times.append(i * window_sec)
-    
-    return  np.array(times), np.array(rms_values)
+    return np.array(rms_values)
 
 """
-   parse audio data and return the RMS values and times.
-   Parameters:
-        detect_played_periods (bool): If True, detect periods where the instrument is played, else print raw RMS values.
-    Returns:
-        tuple: (times, rms_values)
-            times: list of time points corresponding to the RMS values
-            rms_values: list of RMS values at each time point
-    """
+Rééchantillonne les données à intervalles réguliers.
+Paramètres:
+------------
+    times: Les temps des données originales.
+    total_duration: La durée totale de l'audio.
+    *datas: Les données à rééchantillonner.
+    step: L'intervalle de temps pour le rééchantillonnage (par défaut 0.01s).
+"""
+def resample(times, total_duration, *datas, step=0.01):
+    resampled_data, resampled_times = [], []
+    prev_time_window, idx, n = step, 0, len(times)
+    while prev_time_window <= total_duration:
+        if idx < n and times[idx] <= prev_time_window:
+            values = tuple(d[idx] for d in datas)
+            idx += 1
+        else:
+            values = tuple(d[idx - 1] if idx > 0 else d[0] for d in datas)
+        resampled_data.append(values[0] if len(values) == 1 else values)
+        resampled_times.append(prev_time_window)
+        prev_time_window += step
+    return np.array(resampled_times), np.array(resampled_data)
 
-
-def parse_audio_rms(detect_played_periods = False):
-    track_name = get_track_name(TRACK_IDX, True)
-    instrument_idx = INSTRUMENT_IDX + 1
-    print(f"Analyse audio pour la piste : {track_name}")
-    print(f"Analyse de l'instrument : {indexInstrument[instrument_idx]}")
+"""
+Construit un dataset pour un instrument cible donné, en utilisant les indices RMS spécifiés.
+Paramètres:
+------------
+    track_id: L'ID de la piste audio.
+    rms_indices: Liste des indices des instruments pour lesquels calculer le RMS.
+    target_idx: L'indice de l'instrument cible pour lequel prédire les coordonnées.
+    start_time: Le temps de début pour le dataset (par défaut 1s).
+    end_time: Le temps de fin pour le dataset (par défaut toute la durée).
+    fs: La fréquence d'échantillonnage pour le dataset (par défaut 10Hz).
+    seq_dir: Le répertoire contenant les fichiers de séquences spatiales (par défaut "seq").
+    audio_dir: Le répertoire contenant les fichiers audio (par défaut "Audio").
+"""
+def build_dataset(track_id, rms_indices, target_idx,
+                  start_time=1, end_time=None, fs=10,
+                  seq_dir="seq", audio_dir="Audio", bpm_file="BPM_tracks.csv",
+                  out_dir="Data_Training/sequences_datasets",
+                  include_time=True, include_beats=True, include_measures=True, 
+                  include_regions=True):
     
+    global num_dataset
+    # --- Charger le fichier spat ---
+    txt_path = os.path.join(seq_dir, get_instrument_name(target_idx) + ".txt")
+    df = pd.read_csv(txt_path, header=None)
 
-   
-    fname = os.path.join(AUDIO_DIR, f"{track_name}.wav")
+    # Trouver le groupe correspondant
+    figures, current_figures, current_track, track_name = [], [], None, None
+    for value in df.iloc[:, 1].values:
+        value_str = str(value).strip()
+        if value_str.startswith("id"):
+            if current_track == track_id and current_figures:
+                figures = current_figures
+                break
+            current_track = int(value_str.split('-', 1)[0].replace("id", "").strip())
+            current_track_name = value_str.split('-', 1)[-1].strip().rstrip(';')
+            current_figures = []
+        else:
+            current_figures.append(' '.join(value_str.rstrip(';').split()))
+    if not figures and current_track == track_id:
+        figures = current_figures
+        track_name = current_track_name
+    elif figures:
+        track_name = current_track_name
+
+    audio_path = os.path.join(audio_dir, f"{track_name}.wav")
+    total_duration = get_audio_duration(audio_path)
+    if end_time is None or end_time > total_duration:
+        end_time = total_duration
+
+    # --- Extraire coords ---
+    times, xs, ys = [], [], []
+    for value in figures:
+        parts = value.split()
+        if len(parts) >= 3:
+            t = float(parts[-3]) * total_duration
+            times.append(t)
+            xs.append(float(parts[-2]))
+            ys.append(float(parts[-1]))
+    times, xs, ys = np.array(times), np.array(xs), np.array(ys)
+
+    # Grille régulière
+    grid = np.arange(start_time, end_time, 1/fs)
+
+    # --- RMS ---
+    rms_dict = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        rate, data = wavfile.read(fname)
-    channel_idx = instrument_idx + 1  # Audio has a "clic" channel at index 0
-    data_instr = data[:, channel_idx]
+        rate, data = wavfile.read(audio_path)
+    for idx in rms_indices:
+        data_instr = data[:, idx] if data.ndim > 1 else data
+        rms_values = compute_rms(data_instr, rate, window_sec=1/fs)
+        rms_times = np.arange(len(rms_values)) * (1/fs)
+        rms_interp = np.interp(grid, rms_times, rms_values)
+        rms_dict[f"rms_{get_instrument_name(idx)}"] = rms_interp
 
+    # --- Position cible ---
+    x_interp = np.interp(grid, times, xs)
+    y_interp = np.interp(grid, times, ys)
 
+    # --- Construction DataFrame ---
+    df_out = pd.DataFrame(rms_dict)
 
-    times, rms_values = compute_rms(data_instr, rate)
-    print("Nombres de valeurs RMS calculées : ", len(rms_values))
+    if include_time:
+        df_out["time_sec"] = grid
 
+    if include_beats or include_measures:
+        df_bpm = pd.read_csv(bpm_file)
+        track_row = df_bpm[df_bpm["name"] == get_track_name(track_id)]
+        bpm = float(track_row["bpm"].values[0])
+        beat_dur = 60 / bpm
+        total_beats = int(total_duration / beat_dur)
+        beat_times = [i * beat_dur for i in range(total_beats)]
+        beat_units = [(i % 4) + 1 for i in range(total_beats)]
+        measure_times = [i * beat_dur for i in range(0, total_beats, 4)]
+        measure_units = [i//4 + 1 for i in range(total_beats) if i % 4 == 0]
+        _, beats = resample(beat_times, total_duration, beat_units, step=1/fs)
+        _, measures = resample(measure_times, total_duration, measure_units, step=1/fs)
+        beats, measures = beats[:len(grid)], measures[:len(grid)]
+        if include_beats:
+            df_out["beat"] = beats
+        if include_measures:
+            df_out["measure"] = measures
 
-    # On souhaite remplir le tableau de valeur booleenne (instrument joué ou non joué)
-    if(detect_played_periods):
-        rms_values_norm = rms_values / np.max(rms_values) * 10 if np.max(rms_values) > 0 else rms_values
+    if include_regions:
+        regions_data = get_regions_from_name(track_name)
+        region_names_raw = [r["name"] for r in regions_data]
+        region_names = [
+            re.search(r"'(.*?)'", name).group(1).replace(' ', '_')
+            if re.search(r"'(.*?)'", name) else name.replace(' ', '_')
+            for name in region_names_raw
+        ]
+        region_starts = np.array([float(r["start"]) for r in regions_data])
+        idxs = np.searchsorted(region_starts, grid, side="right") - 1
+        regions_resampled = np.array([
+            region_names[i] if i >= 0 else ""
+            for i in idxs
+        ])
+        df_out["region"] = regions_resampled[:len(grid)]
 
-        joue_periods_filtrees, _, _ = detect_periods(rms_values_norm, TIME_SAMPLE)
+    # --- Ajouter coords réelles ---
+    target_name = get_instrument_name(target_idx)
+    df_out[f"x_{target_name}"] = x_interp
+    df_out[f"y_{target_name}"] = y_interp
 
-        # The format is the following : (14.3, 77.98), (81.22, 192.46), (199.38, 222.0)
-        # Write the times in an array and associate the first of the couple with the value True, and the second with the value False
+    # --- Réordonner les colonnes ---
+    ordered_cols = []
+    if include_time:
+        ordered_cols.append("time_sec")
+    ordered_cols.extend([c for c in df_out.columns if c.startswith("rms_")])
+    if include_regions:
+        ordered_cols.append("region")
+    if include_beats:
+        ordered_cols.append("beat")
+    if include_measures:
+        ordered_cols.append("measure")
+    ordered_cols.extend([f"x_{target_name}", f"y_{target_name}"])
 
+    df_out = df_out[ordered_cols]
+    
+    out_path = os.path.join(out_dir, f"dataset_track{track_id}_seq{num_dataset}.csv")
+    df_out.round(3).to_csv(out_path, index=False)
+    print(f"Dataset créé : {out_path}")
 
-        played_times = []
-        played_values = []
-        played_times.append(0.0)
-        played_values.append(0)
-        for start, end in joue_periods_filtrees:
-            played_times.append(start)
-            played_values.append(1)
-            played_times.append(end)
-            played_values.append(0)
+    num_dataset += 1
+    return df_out
 
-        audio_path = os.path.join(AUDIO_DIR, f"{track_name}.wav")
-        if not os.path.exists(audio_path):
-            raise FileNotFoundError(f"Fichier audio {track_name}.wav introuvable")
-        total_duration = get_audio_duration(audio_path)
-        resampled_times, resampled_played_values = resample(played_times, total_duration, played_values)
-        time = resampled_times
-        rms_values = resampled_played_values
-
-    else:
-        rms_values = rms_values
-    return times, rms_values
-
-
+import glob 
 """
-    Parse the regions from the audio file
-    Returns:
-        resampled_regions: list of regions with resampled times
-   """
-def parse_regions():
-    track_name = get_track_name(TRACK_IDX, True)
-    regions = get_regions_from_name(track_name)
-    if(len(regions) == 0):
-        print(f"No regions found for track {track_name}.")
-        return []
-
-    region_names_raw = [region["name"] for region in regions]
-    
-    # Extraction entre apostrophes + remplacement des espaces par des underscores
-    region_names = [
-        re.search(r"'(.*?)'", name).group(1).replace(' ', '_')
-        if re.search(r"'(.*?)'", name) else name.replace(' ', '_')
-        for name in region_names_raw
-    ]
-    
-    region_starts = [region["start"] for region in regions]
-
-    print("regions=:", regions)
-
-    audio_path = os.path.join(AUDIO_DIR, f"{track_name}.wav")
-    if not os.path.exists(audio_path):
-        raise FileNotFoundError(f"Fichier audio {track_name}.wav introuvable")
-    
-    total_duration = get_audio_duration(audio_path)
-
-    # Resample avec la nouvelle version de la fonction
-    _, resampled_regions = resample(region_starts, total_duration, region_names)
-    return resampled_regions
-
+Supprime tous les fichiers datasets générés dans le dossier spécifié.
+Paramètres:
+------------
+    out_dir: Le répertoire contenant les fichiers datasets à supprimer (par défaut "Data_Training/sequences_datasets").
 """
-    Parse the BPM and calculate the positions of beats and measures.
-    Parameters:
-        beats_per_measure (int): Number of beats per measure, default is 4.
-    Returns:
-        tuple: (resampled_beats, resampled_measures)
-            resampled_beats: list of resampled beats with their times and units
-            resampled_measures: list of resampled measures with their times and units
-    """
-def parse_bpm_and_calculate_positions(beats_per_measure=4):
-    track_name_file = get_track_name(TRACK_IDX, True)
-    track_name = get_track_name(TRACK_IDX)
-    
-    audio_path = os.path.join(AUDIO_DIR, f"{track_name_file}.wav")
-    if not os.path.exists(audio_path):
-        raise FileNotFoundError(f"Fichier audio {track_name_file}.wav introuvable")
-
-    total_duration = get_audio_duration(audio_path)
-
-    df = pd.read_csv("BPM_tracks.csv")
-    track_row = df[df["name"] == track_name]
-    if track_row.empty:
-        raise ValueError(f"Track '{track_name}' non trouvé dans BPM_tracks.csv")
-
-    bpm = float(track_row["bpm"].values[0])
-    beat_duration = 60 / bpm
-    total_beats = int(total_duration / beat_duration)
-
-    # Génère les timecodes de chaque beat
-    beat_timecodes = [round(i * beat_duration, 6) for i in range(total_beats)]
-
-    beat_times = []
-    beat_units = []
-    measure_times = []
-    measure_units = []
-
-    for i, t in enumerate(beat_timecodes):
-        beat_in_measure = i % beats_per_measure + 1
-        measure_number = i // beats_per_measure + 1
-
-        beat_times.append(t)
-        beat_units.append(beat_in_measure)
-
-        if beat_in_measure == 1:
-            measure_times.append(t)
-            measure_units.append(measure_number)
-
-    # Resample beats
-    _, resampled_beats = resample(beat_times, total_duration, beat_units)
-
-    # Resample measures
-    _, resampled_measures = resample(measure_times, total_duration, measure_units)
-
-    return resampled_beats, resampled_measures
-
-"""   
-    Create a CSV file with all values from the parsed data.
-    Parameters:
-        all_tracks (bool): If True, create a CSV for all tracks, else for a single track.
-    Returns:
-        None
-"""
-def create_csv_all_values(all_tracks=True):
-    if(all_tracks):
-        tracks_idx = list(range(1,10))
-    else:
-        track_idx = TRACK_IDX
-        tracks_idx = []
-        tracks_idx.append(track_idx)
-
-    for track_idx in tracks_idx:
-        times, audio_data = parse_audio_rms(detect_played_periods=True)
-        _, spat_coord, spat_speed = parse_spat_data() # First return is times, we can use it later if needed
-
-        regions_data = parse_regions()
-        beats, measures = parse_bpm_and_calculate_positions()
-
-        if(len(times) == len(audio_data)  == len(spat_coord) == len(spat_speed) 
-           == len(regions_data) == len(measures)) == len(beats): print("Même longueur de fichier")
+def clear_datasets(out_dir="Data_Training/sequences_datasets"):
+    """Supprime tous les fichiers datasets générés dans le dossier spécifié."""
+    files = glob.glob(os.path.join(out_dir, "dataset_track*_seq*.csv"))
+    for f in files:
+        os.remove(f)
+    print(f"{len(files)} fichiers supprimés de {out_dir}")
 
 
-        if len(audio_data) == len(spat_coord) == len(regions_data):
-            print("Création du csv...")
-        else:
-            raise ValueError("Les longueurs des fichiers parsés ne correspondent pas.")
 
-        track_name_file = get_track_name(track_idx, True) 
-        output_path = os.path.join(RESAMPLE_DIR, f"dataset_all_value_{track_name_file}.csv")
-        
-        with open(output_path, "w") as out_file:
-            # Header
-            out_file.write("time,rms,region,temps,mesures,x,y\n")
-            for (time, rms, (x, y), (dx, dy), region, beat, measure) in zip(times, audio_data, spat_coord, spat_speed, regions_data, beats, measures):
-                out_file.write(f"{time:.2f},{rms},{region},{beat},{measure},{x},{y}\n")
-
-        print(f"Fichier CSV unifié créé dans : {output_path}")
-    
 if __name__ == "__main__":
-    all_tracks = False
-    create_csv_all_values(all_tracks)
+    # Supprime les anciens datasets
+    out_dir = "Data_Training/sequences_datasets"
+    clear_datasets(out_dir=out_dir)
+    # Ne pas préciser start_time et end_time = toute la durée
+
+    ## Nouveau diable
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=230, end_time=245, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=109, end_time=119, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=77, end_time=88, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=129, end_time=141, fs=10)
+    ## Hypnose
+    # build_dataset(track_id=4, rms_indices=[0,1,2,3,4,5,6], target_idx=1, start_time=193, end_time=205, fs=10, add_without_coord=True)
+    # for i in range(1, 9):
+    #     # build_dataset(track_id=i, rms_indices=[0,1,2,3,4,5,6], target_idx=1, fs=10, add_without_coord=True, include_measures=True)
+    #     build_dataset(track_id=i, rms_indices=[0,1,2,3,4,5,6], target_idx=1, fs=10)
+    build_dataset(track_id=7, rms_indices=[0,1,2,3,4,5,6], target_idx=1, fs=10)
+    
+
+
+
+    

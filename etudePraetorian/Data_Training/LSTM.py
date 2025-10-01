@@ -1,4 +1,5 @@
 import os
+
 import glob
 import re
 import numpy as np
@@ -13,6 +14,9 @@ from sklearn.preprocessing import StandardScaler
 # ==============================
 # 1. Dataset PyTorch
 # ==============================
+"""
+Dataset PyTorch pour les séquences temporelles.
+"""
 class SequenceDataset(Dataset):
     def __init__(self, data, targets, seq_len=50):
         self.data = data
@@ -27,6 +31,9 @@ class SequenceDataset(Dataset):
         y = self.targets[idx:idx+self.seq_len]
         return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
 
+"""
+Définition du modèle LSTM.
+"""
 # ==============================
 # 2. Modèle LSTM
 # ==============================
@@ -41,6 +48,17 @@ class SpatialLSTM(nn.Module):
         out = self.fc(out)
         return out
 
+"""
+Entraîne un modèle LSTM pour la prédiction de coordonnées spatiales à partir de données séquentielles.
+----------
+train_loader : DataLoader contenant les séquences d'entraînement.
+input_size : int, nombre de caractéristiques en entrée (features).
+output_size : int, nombre de caractéristiques en sortie (généralement 2 pour x,y).
+hidden_size : int, nombre de neurones cachés dans chaque couche LSTM.
+num_layers : int, nombre de couches LSTM.
+lr : float, taux d'apprentissage pour l'optimiseur Adam.
+n_epochs : int, nombre d'époques pour l'entraînement.
+"""
 # ==============================
 # 3. Entraînement du modèle
 # ==============================
@@ -63,6 +81,17 @@ def train_lstm(train_loader, input_size, output_size, hidden_size=64, num_layers
 
     return model
 
+"""
+Prépare les données et lance l'entraînement du modèle LSTM.
+Paramètres :
+----------
+data_paths : liste de chemins vers les fichiers CSV contenant les données.
+numeric_columns : liste des noms de colonnes numériques à utiliser (doit inclure x,y).
+coord_columns : liste des noms de colonnes pour les coordonnées (par défaut ["x_Voc 1", "y_Voc 1"]).
+seq_len : int, longueur des séquences pour le LSTM.
+batch_size : int, taille des lots pour l'entraînement.
+n_epochs : int, nombre d'époques pour l'entraînement.
+"""
 # ==============================
 # 4. Fonction principale
 # ==============================
@@ -96,6 +125,16 @@ def run_training(data_paths, numeric_columns, coord_columns=["x_Voc 1", "y_Voc 1
 
     return model, scaler
 
+"""
+Prédit des coordonnées spatiales à partir d'un modèle LSTM entraîné.
+Paramètres :
+----------
+model : modèle LSTM entraîné.
+scaler : StandardScaler utilisé pour la normalisation.
+df : DataFrame contenant les données d'entrée.
+numeric_columns : liste des noms de colonnes numériques à utiliser (doit inclure x,y).
+seq_len : int, longueur des séquences pour le LSTM.
+"""
 # ==============================
 # 5. Prédiction pour un fichier 
 # ==============================
@@ -120,13 +159,14 @@ def predict_spatialisation_lstm(model, scaler, df, numeric_columns, seq_len=50):
 
     return pred
 
-
 if __name__ == "__main__":
+
     # ---- Choix des paramètres ----
     train_seqs = [1,2,3,4]   # séquences utilisées pour l’entraînement
     predict_seqs = [0]       # séquences pour lesquelles on prédit les coordonnées 
-    data_dir = "resampled_results2"
-    out_dir = "resampled_results2_predict_coord"
+
+    data_dir = "sequences_datasets"
+    out_dir = "sequences_datasets_predicted"
     os.makedirs(out_dir, exist_ok=True)
 
     # Récupération des fichiers d’entraînement
@@ -156,20 +196,15 @@ if __name__ == "__main__":
         "y_Voc 1"
     ]
 
-
-
     # ---- Entraînement ----
     model, scaler = run_training(
         DATA_TRAIN_PATHS,
         numeric_columns=numeric_columns,
         seq_len=50,
         batch_size=32,
-        n_epochs=30   # plus tu montes, mieux c’est (si tu as le temps)
+        n_epochs=30   # plus tu montes, mieux c’est (mais cela prend du temps)
     )
 
-    
-
-    # ---- Prédiction pour les fichiers "_no_coord" ----
     instr_map = {"Sample" : 0, "Voc 1": 1, "Voc 2": 2, "Guitare": 3, "Basse" : 4, "BatterieG" : 5, "BatterieD" : 6}
     tracks_grouped = defaultdict(list)
 
@@ -202,71 +237,12 @@ if __name__ == "__main__":
 
     # ---- Conversion en données Max ----
     from convert_to_max_data import convert_to_max_data
-    RESULT_FOLDER_MAX = "resampled_result_2_max_data"
+    RESULT_FOLDER_MAX = "max_data_predicted"
     os.makedirs(RESULT_FOLDER_MAX, exist_ok=True)
 
     seq_file = os.path.join(RESULT_FOLDER_MAX, f"seq{instr_id + 1}.txt")
     if os.path.exists(seq_file):
         os.remove(seq_file)
     for track_id, csv_files in tracks_grouped.items():
-        print(f"\nConversion Max pour track {track_id} avec {len(csv_files)} fichiers...")
+        print(f"\nConversion Max pour track {track_id} avec {len(csv_files)} fichier(s)...")
         convert_to_max_data(csv_files=csv_files, track_id=track_id, instr_coord_id=instr_id)
-
-from sklearn.preprocessing import LabelEncoder
-def encode_datasets(file_paths, numeric_columns):
-    """Charge les CSV, encode les colonnes non-numériques en entiers et renvoie les DataFrames encodés."""
-    dfs = [pd.read_csv(fp) for fp in file_paths]
-    encoders = {}
-
-    # Construire les encoders globaux
-    for col in numeric_columns:
-        if any(not pd.api.types.is_numeric_dtype(df[col]) for df in dfs):
-            unique_vals = pd.concat([df[col].astype(str) for df in dfs]).unique()
-            le = LabelEncoder()
-            le.fit(unique_vals)
-            encoders[col] = le
-
-    # Transformer chaque DataFrame
-    encoded_dfs = []
-    for df in dfs:
-        for col, le in encoders.items():
-            df[col] = le.transform(df[col].astype(str))
-        encoded_dfs.append(df)
-
-    return encoded_dfs
-
-
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-def evaluate_model(model, scaler, data_paths, numeric_columns, coord_columns, seq_len=50):
-    all_true, all_pred = [], []
-
-    for path in data_paths:
-        df = pd.read_csv(path)
-        coords_true = df[coord_columns].values
-
-        # prédiction
-        coords_pred = predict_spatialisation_lstm(model, scaler, df, numeric_columns, seq_len=seq_len)
-
-        all_true.append(coords_true[:len(coords_pred)])
-        all_pred.append(coords_pred)
-
-    y_true = np.vstack(all_true)
-    y_pred = np.vstack(all_pred)
-
-    # métriques
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
-    mae = mean_absolute_error(y_true, y_pred)
-    r2 = r2_score(y_true, y_pred)
-
-    # distance euclidienne
-    dist = np.sqrt(np.sum((y_true - y_pred)**2, axis=1))
-    mean_dist = dist.mean()
-
-    print(f"MSE   = {mse:.4f}")
-    print(f"RMSE  = {rmse:.4f}")
-    print(f"MAE   = {mae:.4f}")
-    print(f"R²    = {r2:.4f}")
-    print(f"Mean Euclidean Distance = {mean_dist:.4f}")
-
-    return {"mse": mse, "rmse": rmse, "mae": mae, "r2": r2, "mean_dist": mean_dist}

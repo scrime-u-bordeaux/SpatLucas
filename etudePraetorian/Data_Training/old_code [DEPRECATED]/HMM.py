@@ -100,7 +100,7 @@ if __name__ == "__main__":
     # ---- Choix des paramètres ----
     train_seqs = [0,1,2,3]   # numéros de séquences pour l’entraînement
     data_dir = "resampled_results2"
-    out_dir = "resampled_results2_predict_coord"
+    out_dir = "sequences_datasets_predicted"
     os.makedirs(out_dir, exist_ok=True)
 
     # Récupération des fichiers d’entraînement
@@ -188,7 +188,7 @@ for file_path in DATA_PREDICT_PATHS:
 
 from convert_to_max_data import convert_to_max_data  
 
-RESULT_FOLDER_MAX = "resampled_result_2_max_data"
+RESULT_FOLDER_MAX = "max_data_predicted"
 os.makedirs(RESULT_FOLDER_MAX, exist_ok=True)
 
 # Supprimer le fichier seq<instr_id>.txt avant conversion

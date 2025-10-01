@@ -7,16 +7,16 @@ from Data_Visualization.getData import process_track
 import argparse
 
 """
-Extract coordinates from the result data.
-Parameters:
-    result_data: The data containing coordinates.
-    total_duration: The total duration of the track.
-Returns:
-    times_norm: Normalized times.
-    x_coords: List of x coordinates.
-    y_coords: List of y coordinates.
-    real_times: List of real times corresponding to the coordinates.
-    """
+Extrait les coordonnées des données de résultat.
+Paramètres :
+    result_data : Les données contenant les coordonnées.
+    total_duration : La durée totale du morceau.
+Retourne :
+    times_norm : Temps normalisés.
+    x_coords : Liste des coordonnées x.
+    y_coords : Liste des coordonnées y.
+    real_times : Liste des temps réels correspondant aux coordonnées.
+"""
 def extract_coords(result_data, total_duration):
     times_norm = [coord[0] for coord in result_data]
     x_coords = [coord[1] for coord in result_data]
@@ -25,13 +25,13 @@ def extract_coords(result_data, total_duration):
     return times_norm, x_coords, y_coords, real_times
 
 """
-Extract region names, timecodes, and colors from the regions.
-Parameters:
-    regions: List of region dictionaries containing 'name' and 'start' keys.
-Returns:
-    region_names: List of region names.
-    region_timecodes: List of tuples containing start and end times for each region.
-    region_colors: List of colors for each region.
+Extrait les noms des régions, les timecodes et les couleurs à partir des régions.
+Paramètres :
+    regions : Liste de dictionnaires de régions contenant les clés 'name' et 'start'.
+Retourne :
+    region_names : Liste des noms des régions.
+    region_timecodes : Liste de tuples contenant les temps de début et de fin pour chaque région.
+    region_colors : Liste de couleurs pour chaque région.
 """
 def extract_regions(regions):
     region_names = [m["name"] for m in regions[:-1]]
